@@ -1,50 +1,38 @@
 pipeline {
     agent any
 
-    environment {
-        NODE_VERSION = '18'   // Specify Node.js version
-    }
-
     stages {
         stage('Clone Repository') {
             steps {
-                git 'https://github.com/Nidhekshaa/Prodigy_task1' // Change to your repo URL
+                git 'https://github.com/Nidhekshaa/Prodigy_task1.git' // Change this to your repo
             }
         }
 
         stage('Install Dependencies') {
             parallel {
-                stage('Install Backend Dependencies') {
+                stage('Backend Dependencies') {
                     steps {
-                        dir('backend') {
-                            sh 'npm install'
-                        }
+                        sh 'cd backend && npm install'
                     }
                 }
-                stage('Install Frontend Dependencies') {
+                stage('Frontend Dependencies') {
                     steps {
-                        dir('folder') {
-                            sh 'npm install'
-                        }
+                        sh 'cd folder && npm install'
                     }
                 }
             }
         }
 
-        stage('Lint & Prettier') {
+        stage('Lint and Test') {
             parallel {
-                stage('Lint Backend') {
+                stage('Lint Code') {
                     steps {
-                        dir('backend') {
-                            sh 'npm run lint'
-                        }
+                        sh 'cd folder && npm run lint'
                     }
                 }
-                stage('Lint Frontend') {
+                stage('Run Tests') {
                     steps {
-                        dir('frontend') {
-                            sh 'npm run lint'
-                        }
+                        sh 'cd folder && npm test'
                     }
                 }
             }
@@ -52,60 +40,20 @@ pipeline {
 
         stage('Build Frontend') {
             steps {
-                dir('frontend') {
-                    sh 'npm run build'
-                }
+                sh 'cd folder && npm run build'
             }
         }
 
-        stage('Run Tests') {
-            parallel {
-                stage('Test Backend') {
-                    steps {
-                        dir('backend') {
-                            sh 'npm test'
-                        }
-                    }
-                }
-                stage('Test Frontend') {
-                    steps {
-                        dir('frontend') {
-                            sh 'npm test'
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Deploy Backend') {
+        stage('Restart Backend with PM2') {
             steps {
-                dir('backend') {
-                    sh 'pm2 restart server.js'  // Using PM2 for backend
-                }
+                sh 'cd backend && pm2 restart server.js --name my-backend || pm2 start server.js --name my-backend'
             }
         }
 
         stage('Deploy Frontend') {
             steps {
-                dir('frontend') {
-                    sh 'cp -r build/* /var/www/html/'  // Change the path as needed
-                }
+                sh 'cp -r folder/build/* /var/www/html/'
             }
-        }
-
-        stage('Restart Server') {
-            steps {
-                sh 'pm2 restart all'
-            }
-        }
-    }
-
-    post {
-        success {
-            echo 'Deployment Successful!'
-        }
-        failure {
-            echo 'Deployment Failed!'
         }
     }
 }
