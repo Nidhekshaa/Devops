@@ -23,7 +23,7 @@ pipeline {
                 }
                 stage('Install Frontend Dependencies') {
                     steps {
-                        dir('frontend') {
+                        dir('folder') {
                             sh 'npm install'
                         }
                     }
