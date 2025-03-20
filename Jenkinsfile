@@ -1,93 +1,111 @@
 pipeline {
     agent any
+
+    environment {
+        NODE_VERSION = '18'   // Specify Node.js version
+    }
+
     stages {
-stage("Restore npm Packages") {
-    steps {
-        writeFile file: "next-lock.cache", text: "$GIT_COMMIT"
- 
-        cache(caches: [
-            arbitraryFileCache(
-                path: "node_modules",
-                includes: "**/*",
-                cacheValidityDecidingFile: "package-lock.json"
-            )
-        ]) {
-            sh "npm install"
-        }
-    }
-}
-
-	 stage('Setup NPM and Vagrant Env.') {
-	  parallel { 
-	   stage('npm Install') { 
+        stage('Clone Repository') {
             steps {
-                sh 'npm install'
+                git 'https://github.com/Nidhekshaa/Prodigy_task1' // Change to your repo URL
             }
-            } 
-           stage('Vagrant Env. Setup for Infra'){ 
-	    steps { 
-		sh 'vagrant plugin install virtualbox_WSL2' 
-                sh 'vagrant plugin install vagrant-scp'
-		} 
-           } 
-         } 
         }
 
-	stage('Build the Application') { 
-		steps { 
-			sh 'ng build --configuration production'
-		} 
-	} 
+        stage('Install Dependencies') {
+            parallel {
+                stage('Install Backend Dependencies') {
+                    steps {
+                        dir('backend') {
+                            sh 'npm install'
+                        }
+                    }
+                }
+                stage('Install Frontend Dependencies') {
+                    steps {
+                        dir('frontend') {
+                            sh 'npm install'
+                        }
+                    }
+                }
+            }
+        }
 
-	stage('Run Lint and Prettier') { 
-		parallel { 
- 	        stage('Lint Checks') { 
-		steps { 
-		   sh 'ng add @angular-eslint/schematics' 
-		   sh 'npm run lint'  
-		}
-		}
- 	        stage('Pretty Code') { 
-		steps { 
-		   sh 'npm run prettier:fix'  
-		}
-		}
-               }  
-	} 
-	stage ('Deploy Infra') { 
-		steps {
-		sh 'vagrant up' 
-		} 
-	}
+        stage('Lint & Prettier') {
+            parallel {
+                stage('Lint Backend') {
+                    steps {
+                        dir('backend') {
+                            sh 'npm run lint'
+                        }
+                    }
+                }
+                stage('Lint Frontend') {
+                    steps {
+                        dir('frontend') {
+                            sh 'npm run lint'
+                        }
+                    }
+                }
+            }
+        }
 
-	stage ('Deploy Application') { 
-		steps { 
-		echo 'All done'
-withCredentials([usernamePassword(credentialsId: 'SSHCredentials', passwordVariable: 'SSHUserPass', usernameVariable: 'SSHUserName')]) {
-		sh 'sshpass -p $SSHUserPass ssh-copy-id -o StrictHostKeyChecking=no ${SSHUserName}@192.168.56.105'
-}
-		} 
-	} 
-	stage('Test Application') {
-		parallel { 
- 	        stage('Chrome Testing') { 
-		steps { 
-		   echo 'Test on Chrome Browsers'
-		}
-		}
- 	        stage('Edge Testing') { 
-		steps { 
-		   echo 'Test on Edge Browsers'
-		}
-		}
- 	        stage('Firefox Testing') { 
-		steps { 
-		   echo 'Test on Firefox  Browsers'
-		}
-		}
-	
-		} 
-	} 
- 
+        stage('Build Frontend') {
+            steps {
+                dir('frontend') {
+                    sh 'npm run build'
+                }
+            }
+        }
+
+        stage('Run Tests') {
+            parallel {
+                stage('Test Backend') {
+                    steps {
+                        dir('backend') {
+                            sh 'npm test'
+                        }
+                    }
+                }
+                stage('Test Frontend') {
+                    steps {
+                        dir('frontend') {
+                            sh 'npm test'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Deploy Backend') {
+            steps {
+                dir('backend') {
+                    sh 'pm2 restart server.js'  // Using PM2 for backend
+                }
+            }
+        }
+
+        stage('Deploy Frontend') {
+            steps {
+                dir('frontend') {
+                    sh 'cp -r build/* /var/www/html/'  // Change the path as needed
+                }
+            }
+        }
+
+        stage('Restart Server') {
+            steps {
+                sh 'pm2 restart all'
+            }
         }
     }
+
+    post {
+        success {
+            echo 'Deployment Successful!'
+        }
+        failure {
+            echo 'Deployment Failed!'
+        }
+    }
+}
